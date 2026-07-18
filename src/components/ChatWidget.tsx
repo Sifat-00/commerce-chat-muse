@@ -29,11 +29,17 @@ interface Message {
 const WELCOME = "Hi! How can I help you find products today?";
 
 async function sendToWebhook(userMessage: string): Promise<string> {
+  let session = localStorage.getItem("chat_session_id");
+  if (!session) {
+    session = "sess_" + Math.random().toString(36).substring(2, 15);
+    localStorage.setItem("chat_session_id", session);
+  }
+
   try {
     const res = await fetch(N8N_WEBHOOK_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ chatInput: userMessage }),
+      body: JSON.stringify({ chatInput: userMessage, sessionId: session }),
     });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const ct = res.headers.get("content-type") || "";
