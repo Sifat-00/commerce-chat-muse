@@ -13,7 +13,7 @@ export const Route = createFileRoute("/")({
       { property: "og:title", content: "Shopify AI Assistant" },
       {
         property: "og:description",
-        content: "A dedicated AI chat interface for shopping and product discovery.",
+        content: "Chat with your Shopify AI Assistant to discover products, get recommendations, and shop faster.",
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },

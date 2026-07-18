@@ -77,14 +77,18 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Lovable App" },
-      { name: "description", content: "Lovable Generated Project" },
+      { title: "Shopify AI Assistant" },
+      { name: "description", content: "Chat with your Shopify AI Assistant to discover products, get recommendations, and shop faster." },
       { name: "author", content: "Lovable" },
-      { property: "og:title", content: "Lovable App" },
-      { property: "og:description", content: "Lovable Generated Project" },
+      { property: "og:title", content: "Shopify AI Assistant" },
+      { property: "og:description", content: "Chat with your Shopify AI Assistant to discover products, get recommendations, and shop faster." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
       { name: "twitter:site", content: "@Lovable" },
+      { name: "twitter:title", content: "Shopify AI Assistant" },
+      { name: "twitter:description", content: "Chat with your Shopify AI Assistant to discover products, get recommendations, and shop faster." },
+      { property: "og:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/7ce9e94b-78b6-45b2-b375-686417a35654/id-preview-fcd6505a--fe86e5aa-1c71-48c7-9af6-e448545ffd70.lovable.app-1784374585237.png" },
+      { name: "twitter:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/7ce9e94b-78b6-45b2-b375-686417a35654/id-preview-fcd6505a--fe86e5aa-1c71-48c7-9af6-e448545ffd70.lovable.app-1784374585237.png" },
     ],
     links: [
       {
