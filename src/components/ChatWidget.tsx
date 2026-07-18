@@ -15,7 +15,8 @@ import {
 // ============================================================================
 // CONFIG: Replace with your n8n Webhook URL
 // ============================================================================
-const N8N_WEBHOOK_URL = "https://your-n8n-instance.com/webhook/your-webhook-id";
+const N8N_WEBHOOK_URL =
+  "https://n8n-f2ty.srv1670697.hstgr.cloud/webhook-test/d24f300d-8e91-454b-bd84-e48b4ae983e4";
 
 type Role = "user" | "bot";
 interface Message {
