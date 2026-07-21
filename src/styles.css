@@ -142,3 +142,33 @@
     color: var(--color-foreground);
   }
 }
+
+@keyframes msg-in {
+  0% { opacity: 0; transform: translateY(8px) scale(0.98); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes card-slide-in {
+  0% { opacity: 0; transform: translateY(16px) scale(0.96); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes gradient-shift {
+  0%, 100% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+}
+@keyframes float-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(139, 92, 246, 0.4); }
+  50% { box-shadow: 0 0 0 12px rgba(139, 92, 246, 0); }
+}
+@keyframes caret-blink {
+  0%, 50% { opacity: 1; }
+  51%, 100% { opacity: 0; }
+}
+
+.animate-msg-in { animation: msg-in 0.35s cubic-bezier(0.22, 1, 0.36, 1) both; }
+.animate-card-slide-in { animation: card-slide-in 0.55s cubic-bezier(0.22, 1, 0.36, 1) both; }
+.animate-gradient { background-size: 200% 200%; animation: gradient-shift 6s ease infinite; }
+.animate-send-pulse { animation: float-pulse 2.2s ease-in-out infinite; }
+.animate-caret { animation: caret-blink 1s steps(1) infinite; }
+
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
