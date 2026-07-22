@@ -514,7 +514,7 @@ function MessageBubble({
 function TextBlock({ content }: { content: string }) {
   return (
     <ReactMarkdown
-      remarkPlugins={[remarkGfm]}
+      remarkPlugins={[remarkGfm, remarkBreaks]}
       components={{
         img: ({ src, alt }) => (
           <img
