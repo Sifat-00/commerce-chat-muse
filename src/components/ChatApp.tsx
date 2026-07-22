@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import remarkBreaks from "remark-breaks";
 import {
   Send,
   Paperclip,
@@ -513,7 +514,7 @@ function MessageBubble({
 function TextBlock({ content }: { content: string }) {
   return (
     <ReactMarkdown
-      remarkPlugins={[remarkGfm]}
+      remarkPlugins={[remarkGfm, remarkBreaks]}
       components={{
         img: ({ src, alt }) => (
           <img
@@ -549,7 +550,7 @@ function TextBlock({ content }: { content: string }) {
             </a>
           );
         },
-        p: ({ children }) => <p className="my-1 first:mt-0 last:mb-0">{children}</p>,
+        p: ({ children }) => <p className="my-1 whitespace-pre-wrap first:mt-0 last:mb-0">{children}</p>,
         ul: ({ children }) => <ul className="my-1 list-disc pl-4">{children}</ul>,
         ol: ({ children }) => <ol className="my-1 list-decimal pl-4">{children}</ol>,
         code: ({ children }) => (
