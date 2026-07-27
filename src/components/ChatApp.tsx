@@ -20,7 +20,7 @@ import {
 } from "lucide-react";
 
 const N8N_WEBHOOK_URL =
-  "https://n8n-f2ty.srv1670697.hstgr.cloud/webhook-test/4a4bbb56-7aa2-4f24-94fe-959cacf324f9";
+  "https://n8n-f2ty.srv1670697.hstgr.cloud/webhook-test/eae0f2a7-6605-47fd-935d-a11b1d47c538";
 
 type Role = "user" | "bot";
 interface Message {
