@@ -497,6 +497,10 @@ export function ChatWidget() {
     [phase],
   );
 
+  // Visible while waiting, and hidden the instant real text starts rendering.
+  const showStatus = phase === "checking" || (phase === "streaming" && !streamText);
+
+
   return (
     <>
       {/* Chat window */}
