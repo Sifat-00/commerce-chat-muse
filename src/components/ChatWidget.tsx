@@ -171,8 +171,15 @@ function extractMarkdownProducts(text: string): { text: string; products: Produc
     // Block spans from just after the previous image to just before the next one,
     // which naturally includes any leading title text for the first item.
     const blockStart = index === 0 ? 0 : hits[index - 1].end;
-    const blockEnd = index + 1 < hits.length ? hits[index + 1].start : text.length;
+    const nextImageStart = index + 1 < hits.length ? hits[index + 1].start : text.length;
+    // Stop early at the next list-item/heading boundary so a following item's
+    // price/stock never bleeds into this card.
+    const after = text.slice(hit.end, nextImageStart);
+    const boundary = after.match(/\n\s*(?:\d+[.)]\s|[-*+]\s|#{1,6}\s|\*\*)/);
+    const blockEnd =
+      boundary && boundary.index !== undefined ? hit.end + boundary.index : nextImageStart;
     const block = text.slice(blockStart, blockEnd);
+
 
     if (seenImages.has(hit.url)) return;
     seenImages.add(hit.url);
