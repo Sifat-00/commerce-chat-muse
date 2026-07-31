@@ -92,39 +92,122 @@ function collectProducts(node: unknown, out: Product[] = [], depth = 0): Product
   return out;
 }
 
-/** Extract markdown-style product blocks: ![title](img) ... price ... stock */
-function extractMarkdownProducts(text: string): { text: string; products: Product[] } {
-  const products: Product[] = [];
-  const imageRe = /!\[([^\]]*)\]\((https?:\/\/[^\s)]+)\)/g;
-  const matches = [...text.matchAll(imageRe)];
-  if (matches.length < 1) return { text, products };
+type ImageHit = { start: number; end: number; url: string; alt: string };
 
-  let cleaned = text;
-  matches.forEach((match, index) => {
-    const start = (match.index ?? 0) + match[0].length;
-    const end =
-      index + 1 < matches.length ? (matches[index + 1].index ?? text.length) : text.length;
-    const tail = text.slice(start, end);
-    const price = tail.match(/(?:\$|₹|€|£)\s?[\d.,]+/)?.[0] ?? "";
-    const stock = tail.match(/(\d+)\s*(?:available|in stock|left)/i)?.[1];
-    const link = tail.match(/\[[^\]]*\]\((https?:\/\/[^\s)]+)\)/)?.[1] ?? null;
-    const heading =
-      tail.match(/\*\*([^*]+)\*\*/)?.[1] ??
-      tail.match(/^\s*#{1,6}\s*(.+)$/m)?.[1] ??
-      match[1] ??
-      "Product";
+const IMAGE_EXT = "(?:png|jpe?g|webp|gif|avif)";
+
+/**
+ * Find every image reference in the text, regardless of format:
+ *  - ![alt](url)          markdown image
+ *  - [alt](url.jpg)       link that points at an image
+ *  - https://…/x.jpg      bare image url
+ * Ordered by position so segment boundaries stay correct.
+ */
+function findImageHits(text: string): ImageHit[] {
+  const hits: ImageHit[] = [];
+  const seen = new Set<number>();
+  const push = (start: number, end: number, url: string, alt: string) => {
+    if (seen.has(start)) return;
+    seen.add(start);
+    hits.push({ start, end, url, alt });
+  };
+
+  const mdImage = /!\[([^\]]*)\]\(\s*(https?:\/\/[^\s)]+?)\s*\)/g;
+  for (const m of text.matchAll(mdImage)) {
+    push(m.index ?? 0, (m.index ?? 0) + m[0].length, m[2], m[1] ?? "");
+  }
+
+  const mdLinkImage = new RegExp(
+    `\\[([^\\]]*)\\]\\(\\s*(https?:\\/\\/[^\\s)]+?\\.${IMAGE_EXT}(?:\\?[^\\s)]*)?)\\s*\\)`,
+    "gi",
+  );
+  for (const m of text.matchAll(mdLinkImage)) {
+    const idx = m.index ?? 0;
+    if (text[idx - 1] === "!") continue;
+    push(idx, idx + m[0].length, m[2], m[1] ?? "");
+  }
+
+  const bareImage = new RegExp(
+    `https?:\\/\\/[^\\s)<>"']+\\.${IMAGE_EXT}(?:\\?[^\\s)<>"']*)?`,
+    "gi",
+  );
+  for (const m of text.matchAll(bareImage)) {
+    const idx = m.index ?? 0;
+    const prev = text.slice(Math.max(0, idx - 2), idx);
+    if (prev.endsWith("(")) continue; // already captured as markdown
+    push(idx, idx + m[0].length, m[0], "");
+  }
+
+  return hits.sort((a, b) => a.start - b.start);
+}
+
+/** Pick the best title inside a product block. */
+function pickTitle(block: string, alt: string): string {
+  const candidates = [
+    block.match(/^\s*(?:\d+[.)]\s*)?\*\*([^*\n]+)\*\*/m)?.[1],
+    block.match(/\*\*([^*\n]+)\*\*/)?.[1],
+    block.match(/^\s*#{1,6}\s*(.+)$/m)?.[1],
+    block.match(/^\s*\d+[.)]\s*(.+)$/m)?.[1],
+    alt,
+  ];
+  const found = candidates.find((value) => value && value.trim().length > 1);
+  return (found ?? "Product").replace(/[*_`#]/g, "").trim();
+}
+
+/**
+ * Extract product blocks from markdown. Blocks are segmented around every image
+ * hit, and each block is extended BACKWARDS to the preceding blank line/list
+ * marker so a title written *before* its image (the very first item, typically)
+ * is still captured.
+ */
+function extractMarkdownProducts(text: string): { text: string; products: Product[] } {
+  const hits = findImageHits(text);
+  if (!hits.length) return { text, products: [] };
+
+  const products: Product[] = [];
+  const seenImages = new Set<string>();
+
+  hits.forEach((hit, index) => {
+    // Block spans from just after the previous image to just before the next one,
+    // which naturally includes any leading title text for the first item.
+    const blockStart = index === 0 ? 0 : hits[index - 1].end;
+    const blockEnd = index + 1 < hits.length ? hits[index + 1].start : text.length;
+    const block = text.slice(blockStart, blockEnd);
+
+    if (seenImages.has(hit.url)) return;
+    seenImages.add(hit.url);
+
+    const price = block.match(/(?:\$|₹|€|£|USD\s?|INR\s?)\s?[\d][\d.,]*/i)?.[0]?.trim() ?? "";
+    const stock = block.match(/(\d+)\s*(?:available|in stock|left|units?)/i)?.[1];
+    const link =
+      [...block.matchAll(/\[[^\]]*\]\((https?:\/\/[^\s)]+)\)/g)]
+        .map((m) => m[1])
+        .find((url) => url !== hit.url && !new RegExp(`\\.${IMAGE_EXT}`, "i").test(url)) ?? null;
+
     products.push({
       id: uid(),
-      title: heading.trim(),
+      title: pickTitle(block, hit.alt),
       price,
-      image: match[2],
+      image: hit.url,
       stock: stock ? Number(stock) : null,
       url: link,
     });
-    cleaned = cleaned.replace(text.slice(match.index ?? 0, end), "");
   });
 
-  return { text: cleaned.trim(), products };
+  // Only strip the image tokens themselves — keep the readable text list intact.
+  let cleaned = "";
+  let cursor = 0;
+  hits.forEach((hit) => {
+    cleaned += text.slice(cursor, hit.start);
+    cursor = hit.end;
+  });
+  cleaned += text.slice(cursor);
+  cleaned = cleaned
+    .replace(/[ \t]+\n/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+
+  return { text: cleaned, products };
 }
 
 function parseWebhookPayload(raw: string): { text: string; products: Product[] } {
@@ -149,13 +232,30 @@ function parseWebhookPayload(raw: string): { text: string; products: Product[] }
     /* plain text response */
   }
 
-  if (!products.length) {
-    const parsed = extractMarkdownProducts(text);
-    text = parsed.text;
-    products = parsed.products;
-  }
+  // Always parse the markdown too, then merge — the text list can contain items
+  // that the structured payload missed (and vice versa).
+  const parsed = extractMarkdownProducts(text);
+  text = parsed.text;
+  const byImage = new Map<string, Product>();
+  [...products, ...parsed.products].forEach((product) => {
+    const existing = byImage.get(product.image);
+    if (!existing) {
+      byImage.set(product.image, product);
+      return;
+    }
+    byImage.set(product.image, {
+      ...existing,
+      title: existing.title && existing.title !== "Product" ? existing.title : product.title,
+      price: existing.price || product.price,
+      stock: existing.stock ?? product.stock,
+      url: existing.url ?? product.url,
+    });
+  });
+  products = [...byImage.values()];
+
   return { text: text.trim(), products };
 }
+
 
 /* ------------------------------ product carousel -------------------------- */
 
