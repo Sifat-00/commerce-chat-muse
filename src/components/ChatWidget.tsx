@@ -569,28 +569,34 @@ export function ChatWidget() {
             ),
           )}
 
-          {phase !== "idle" && (
-            <div className="animate-msg-in flex items-start gap-2">
-              <BotAvatar size="sm" />
-              <div className="min-w-0 flex-1">
-                <div className="inline-flex max-w-full items-center gap-2 rounded-2xl rounded-tl-md bg-slate-100 px-3.5 py-2 text-sm text-slate-700 shadow-sm">
-                  <span className="animate-in text-xs font-medium text-slate-500">
-                    {statusLabel}
-                  </span>
-                  {phase === "streaming" && <Dots />}
-                </div>
-                {phase === "streaming" && streamText && (
-                  <div className="mt-2 inline-block max-w-full rounded-2xl rounded-tl-md bg-slate-100 px-3.5 py-2 text-sm text-slate-800 shadow-sm">
+            {phase === "streaming" && streamText && (
+              <div className="animate-msg-in flex items-start gap-2">
+                <BotAvatar size="sm" />
+                <div className="min-w-0 flex-1">
+                  <div className="inline-block max-w-full rounded-2xl rounded-tl-md bg-slate-100 px-3.5 py-2 text-sm text-slate-800 shadow-sm">
                     <p className="whitespace-pre-wrap leading-relaxed">
                       {streamText}
                       <span className="animate-caret ml-0.5 inline-block h-3.5 w-[2px] translate-y-0.5 bg-slate-500" />
                     </p>
                   </div>
-                )}
+                </div>
               </div>
-            </div>
-          )}
+            )}
+          </div>
+
+          {/* Pinned typing status — bottom-left, above the composer, no layout shift */}
+          <div
+            aria-live="polite"
+            className={`pointer-events-none absolute bottom-0 left-0 right-0 flex items-center gap-2 bg-gradient-to-t from-white via-white/95 to-transparent px-4 pb-2 pt-4 transition-all duration-300 ease-out ${
+              showStatus ? "translate-y-0 opacity-100" : "translate-y-1 opacity-0"
+            }`}
+          >
+            <BotAvatar size="sm" />
+            <span className="animate-pulse text-xs font-medium text-gray-500">{statusLabel}</span>
+            <Dots />
+          </div>
         </div>
+
 
         {/* Composer */}
         <form
