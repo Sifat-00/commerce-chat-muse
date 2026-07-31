@@ -329,7 +329,12 @@ export function ChatWidget() {
     if (el) el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
   }, [messages, phase, streamText, open]);
 
-  useEffect(() => () => streamTimer.current && clearInterval(streamTimer.current), []);
+  useEffect(
+    () => () => {
+      if (streamTimer.current) clearInterval(streamTimer.current);
+    },
+    [],
+  );
 
   const streamIn = useCallback((text: string, products: Product[]) => {
     const words = text.length ? text.split(/(\s+)/) : [];
