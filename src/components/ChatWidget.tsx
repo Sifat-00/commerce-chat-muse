@@ -530,7 +530,11 @@ export function ChatWidget() {
         </header>
 
         {/* Thread */}
-        <div ref={scrollArea} className="flex-1 space-y-4 overflow-y-auto px-4 py-4">
+        <div className="relative min-h-0 flex-1">
+          <div
+            ref={scrollArea}
+            className="h-full space-y-4 overflow-y-auto px-4 pb-10 pt-4 scroll-smooth"
+          >
           {messages.map((message) =>
             message.role === "user" ? (
               <div key={message.id} className="animate-msg-in flex justify-end">
