@@ -410,16 +410,21 @@ function ProductCarousel({ products }: { products: Product[] }) {
               decoding="async"
               className="h-32 w-full rounded-t-2xl object-cover"
             />
-            <h4 className="mt-2 line-clamp-2 px-2.5 text-xs font-bold text-gray-900">
+            <h4 className="mt-2 line-clamp-2 px-2.5 text-center text-sm font-bold leading-snug text-gray-900">
               {product.title}
             </h4>
+            {product.description && (
+              <p className="mt-1 line-clamp-3 px-2.5 text-center text-[11px] leading-relaxed text-gray-500">
+                {product.description}
+              </p>
+            )}
             {product.price && (
-              <p className="mt-0.5 px-2.5 text-sm font-semibold text-emerald-600">
+              <p className="mt-1.5 px-2.5 text-center text-sm font-semibold text-emerald-600">
                 {product.price}
               </p>
             )}
             {product.stock !== null && product.stock !== undefined && (
-              <p className="mt-1 flex items-center gap-1.5 px-2.5 text-[11px] text-gray-500">
+              <p className="mt-1 flex items-center justify-center gap-1.5 px-2.5 text-[11px] text-gray-500">
                 <span className="h-1.5 w-1.5 flex-shrink-0 animate-bounce rounded-full bg-green-500" />
                 In Stock: {product.stock} available
               </p>
@@ -428,9 +433,9 @@ function ProductCarousel({ products }: { products: Product[] }) {
               href={product.url ?? "#"}
               target={product.url ? "_blank" : undefined}
               rel="noreferrer"
-              className="mx-2.5 mt-auto mb-2.5 w-[calc(100%-20px)] rounded-xl border border-gray-100 bg-gray-50 py-1.5 text-center text-xs font-medium text-gray-700 transition-colors duration-200 hover:bg-gray-100 hover:text-black"
+              className="mx-2.5 mt-auto mb-2.5 mt-3 w-[calc(100%-20px)] rounded-xl border border-gray-100 bg-gray-50 py-1.5 text-center text-xs font-medium text-gray-700 transition-colors duration-200 hover:bg-gray-100 hover:text-black"
             >
-              Add to Cart
+              View Details
             </a>
           </div>
         ))}
