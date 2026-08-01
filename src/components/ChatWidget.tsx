@@ -23,6 +23,7 @@ type Product = {
   title: string;
   price: string;
   image: string;
+  description?: string | null;
   stock?: number | null;
   url?: string | null;
 };
@@ -77,6 +78,10 @@ function collectProducts(node: unknown, out: Product[] = [], depth = 0): Product
       title: String(title),
       price: normalizePrice(obj.price ?? obj.amount ?? obj.cost),
       image,
+      description:
+        typeof (obj.description ?? obj.desc ?? obj.summary) === "string"
+          ? String(obj.description ?? obj.desc ?? obj.summary)
+          : null,
       stock:
         stockRaw === undefined || stockRaw === null || Number.isNaN(Number(stockRaw))
           ? null
@@ -252,6 +257,35 @@ function stripProductProse(text: string, products: Product[]): string {
   return kept.join("\n").replace(/\n{3,}/g, "\n\n").trim();
 }
 
+/**
+ * Backend contract: `<products>[ {...}, {...} ]</products>` blocks.
+ * The tags and their JSON payload are removed from the chat text entirely and
+ * turned into carousel cards.
+ */
+function extractTaggedProducts(text: string): { text: string; products: Product[] } {
+  const tag = /<products>([\s\S]*?)<\/products>/gi;
+  const products: Product[] = [];
+  let cleaned = text;
+
+  for (const match of text.matchAll(tag)) {
+    const body = (match[1] ?? "").trim().replace(/^```(?:json)?/i, "").replace(/```$/, "").trim();
+    try {
+      collectProducts(JSON.parse(body), products);
+    } catch {
+      /* malformed block — just hide it */
+    }
+    cleaned = cleaned.replace(match[0], "");
+  }
+
+  // Hide any unterminated/opening tag remnants too.
+  cleaned = cleaned
+    .replace(/<\/?products>/gi, "")
+    .replace(/[ \t]+\n/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+
+  return { text: cleaned, products };
+}
 
 function parseWebhookPayload(raw: string): { text: string; products: Product[] } {
   let text = raw;
@@ -274,6 +308,18 @@ function parseWebhookPayload(raw: string): { text: string; products: Product[] }
   } catch {
     /* plain text response */
   }
+
+  // <products>…</products> takes priority: strip it and use its JSON.
+  const tagged = extractTaggedProducts(text);
+  text = tagged.text;
+  if (tagged.products.length) {
+    const byImageTag = new Map<string, Product>();
+    [...tagged.products, ...products].forEach((p) => {
+      if (!byImageTag.has(p.image)) byImageTag.set(p.image, p);
+    });
+    return { text: text.trim(), products: [...byImageTag.values()] };
+  }
+
 
   // Always parse the markdown too, then merge — the text list can contain items
   // that the structured payload missed (and vice versa).
@@ -364,16 +410,21 @@ function ProductCarousel({ products }: { products: Product[] }) {
               decoding="async"
               className="h-32 w-full rounded-t-2xl object-cover"
             />
-            <h4 className="mt-2 line-clamp-2 px-2.5 text-xs font-bold text-gray-900">
+            <h4 className="mt-2 line-clamp-2 px-2.5 text-center text-sm font-bold leading-snug text-gray-900">
               {product.title}
             </h4>
+            {product.description && (
+              <p className="mt-1 line-clamp-3 px-2.5 text-center text-[11px] leading-relaxed text-gray-500">
+                {product.description}
+              </p>
+            )}
             {product.price && (
-              <p className="mt-0.5 px-2.5 text-sm font-semibold text-emerald-600">
+              <p className="mt-1.5 px-2.5 text-center text-sm font-semibold text-emerald-600">
                 {product.price}
               </p>
             )}
             {product.stock !== null && product.stock !== undefined && (
-              <p className="mt-1 flex items-center gap-1.5 px-2.5 text-[11px] text-gray-500">
+              <p className="mt-1 flex items-center justify-center gap-1.5 px-2.5 text-[11px] text-gray-500">
                 <span className="h-1.5 w-1.5 flex-shrink-0 animate-bounce rounded-full bg-green-500" />
                 In Stock: {product.stock} available
               </p>
@@ -384,7 +435,7 @@ function ProductCarousel({ products }: { products: Product[] }) {
               rel="noreferrer"
               className="mx-2.5 mt-auto mb-2.5 w-[calc(100%-20px)] rounded-xl border border-gray-100 bg-gray-50 py-1.5 text-center text-xs font-medium text-gray-700 transition-colors duration-200 hover:bg-gray-100 hover:text-black"
             >
-              Add to Cart
+              View Details
             </a>
           </div>
         ))}
