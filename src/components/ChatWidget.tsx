@@ -166,6 +166,7 @@ function extractMarkdownProducts(text: string): { text: string; products: Produc
 
   const products: Product[] = [];
   const seenImages = new Set<string>();
+  const ranges: Array<{ start: number; end: number }> = [];
 
   hits.forEach((hit, index) => {
     // Block spans from just after the previous image to just before the next one,
@@ -180,6 +181,15 @@ function extractMarkdownProducts(text: string): { text: string; products: Produc
       boundary && boundary.index !== undefined ? hit.end + boundary.index : nextImageStart;
     const block = text.slice(blockStart, blockEnd);
 
+    // Removal range: keep any intro prose that comes before this product's own
+    // title line, so only the product details are stripped.
+    const before = text.slice(blockStart, hit.start);
+    const titleAnchor = before.search(/(?:^|\n)\s*(?:\d+[.)]\s|[-*+]\s|#{1,6}\s|\*\*)[^\n]*$/);
+    const removeStart =
+      titleAnchor >= 0
+        ? blockStart + (before[titleAnchor] === "\n" ? titleAnchor + 1 : titleAnchor)
+        : hit.start;
+    ranges.push({ start: removeStart, end: blockEnd });
 
     if (seenImages.has(hit.url)) return;
     seenImages.add(hit.url);
@@ -201,13 +211,15 @@ function extractMarkdownProducts(text: string): { text: string; products: Produc
     });
   });
 
-  // Only strip the image tokens themselves — keep the readable text list intact.
+  // Strip the entire product detail blocks — the carousel renders them instead.
   let cleaned = "";
   let cursor = 0;
-  hits.forEach((hit) => {
-    cleaned += text.slice(cursor, hit.start);
-    cursor = hit.end;
-  });
+  ranges
+    .sort((a, b) => a.start - b.start)
+    .forEach((range) => {
+      if (range.start > cursor) cleaned += text.slice(cursor, range.start);
+      cursor = Math.max(cursor, range.end);
+    });
   cleaned += text.slice(cursor);
   cleaned = cleaned
     .replace(/[ \t]+\n/g, "\n")
@@ -216,6 +228,30 @@ function extractMarkdownProducts(text: string): { text: string; products: Produc
 
   return { text: cleaned, products };
 }
+
+/**
+ * For structured (JSON) product payloads the accompanying text often repeats the
+ * same names/prices/stock lines. Drop those lines so nothing shows twice.
+ */
+function stripProductProse(text: string, products: Product[]): string {
+  if (!products.length || !text.trim()) return text;
+  const titles = products
+    .map((p) => p.title?.toLowerCase().trim())
+    .filter((t): t is string => !!t && t !== "product" && t.length > 3);
+
+  const kept = text.split("\n").filter((line) => {
+    const value = line.toLowerCase();
+    if (!value.trim()) return true;
+    if (titles.some((title) => value.includes(title))) return false;
+    if (/(?:\$|₹|€|£)\s?[\d]/.test(line)) return false;
+    if (/\d+\s*(?:available|in stock|left|units?)/i.test(line)) return false;
+    if (/https?:\/\//.test(line)) return false;
+    return true;
+  });
+
+  return kept.join("\n").replace(/\n{3,}/g, "\n\n").trim();
+}
+
 
 function parseWebhookPayload(raw: string): { text: string; products: Product[] } {
   let text = raw;
