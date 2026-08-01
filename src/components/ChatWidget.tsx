@@ -295,8 +295,10 @@ function parseWebhookPayload(raw: string): { text: string; products: Product[] }
     });
   });
   products = [...byImage.values()];
+  text = stripProductProse(text, products);
 
   return { text: text.trim(), products };
+
 }
 
 
