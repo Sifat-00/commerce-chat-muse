@@ -433,7 +433,7 @@ function ProductCarousel({ products }: { products: Product[] }) {
               href={product.url ?? "#"}
               target={product.url ? "_blank" : undefined}
               rel="noreferrer"
-              className="mx-2.5 mt-auto mb-2.5 mt-3 w-[calc(100%-20px)] rounded-xl border border-gray-100 bg-gray-50 py-1.5 text-center text-xs font-medium text-gray-700 transition-colors duration-200 hover:bg-gray-100 hover:text-black"
+              className="mx-2.5 mt-auto mb-2.5 w-[calc(100%-20px)] rounded-xl border border-gray-100 bg-gray-50 py-1.5 text-center text-xs font-medium text-gray-700 transition-colors duration-200 hover:bg-gray-100 hover:text-black"
             >
               View Details
             </a>
