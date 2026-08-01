@@ -23,6 +23,7 @@ type Product = {
   title: string;
   price: string;
   image: string;
+  description?: string | null;
   stock?: number | null;
   url?: string | null;
 };
@@ -77,6 +78,10 @@ function collectProducts(node: unknown, out: Product[] = [], depth = 0): Product
       title: String(title),
       price: normalizePrice(obj.price ?? obj.amount ?? obj.cost),
       image,
+      description:
+        typeof (obj.description ?? obj.desc ?? obj.summary) === "string"
+          ? String(obj.description ?? obj.desc ?? obj.summary)
+          : null,
       stock:
         stockRaw === undefined || stockRaw === null || Number.isNaN(Number(stockRaw))
           ? null
