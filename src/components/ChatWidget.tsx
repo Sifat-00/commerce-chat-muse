@@ -257,6 +257,35 @@ function stripProductProse(text: string, products: Product[]): string {
   return kept.join("\n").replace(/\n{3,}/g, "\n\n").trim();
 }
 
+/**
+ * Backend contract: `<products>[ {...}, {...} ]</products>` blocks.
+ * The tags and their JSON payload are removed from the chat text entirely and
+ * turned into carousel cards.
+ */
+function extractTaggedProducts(text: string): { text: string; products: Product[] } {
+  const tag = /<products>([\s\S]*?)<\/products>/gi;
+  const products: Product[] = [];
+  let cleaned = text;
+
+  for (const match of text.matchAll(tag)) {
+    const body = (match[1] ?? "").trim().replace(/^```(?:json)?/i, "").replace(/```$/, "").trim();
+    try {
+      collectProducts(JSON.parse(body), products);
+    } catch {
+      /* malformed block — just hide it */
+    }
+    cleaned = cleaned.replace(match[0], "");
+  }
+
+  // Hide any unterminated/opening tag remnants too.
+  cleaned = cleaned
+    .replace(/<\/?products>/gi, "")
+    .replace(/[ \t]+\n/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+
+  return { text: cleaned, products };
+}
 
 function parseWebhookPayload(raw: string): { text: string; products: Product[] } {
   let text = raw;
@@ -279,6 +308,18 @@ function parseWebhookPayload(raw: string): { text: string; products: Product[] }
   } catch {
     /* plain text response */
   }
+
+  // <products>…</products> takes priority: strip it and use its JSON.
+  const tagged = extractTaggedProducts(text);
+  text = tagged.text;
+  if (tagged.products.length) {
+    const byImageTag = new Map<string, Product>();
+    [...tagged.products, ...products].forEach((p) => {
+      if (!byImageTag.has(p.image)) byImageTag.set(p.image, p);
+    });
+    return { text: text.trim(), products: [...byImageTag.values()] };
+  }
+
 
   // Always parse the markdown too, then merge — the text list can contain items
   // that the structured payload missed (and vice versa).
