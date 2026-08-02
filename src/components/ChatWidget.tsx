@@ -598,8 +598,12 @@ export function ChatWidget() {
       });
       if (!response.ok) throw new Error(`Request failed (${response.status})`);
       const raw = await response.text();
-      const { text, products } = parseWebhookPayload(raw);
-      streamIn(text || (products.length ? "Here's what I found:" : "…"), products);
+      const { text, products, browseUrl } = parseWebhookPayload(raw);
+      streamIn(
+        text || (products.length ? "Here's what I found:" : "…"),
+        products,
+        browseUrl,
+      );
     } catch (error) {
       setPhase("idle");
       setMessages((prev) => [
