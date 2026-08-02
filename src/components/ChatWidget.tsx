@@ -11,6 +11,7 @@ import {
   ChevronRight,
   AlertTriangle,
   Bot,
+  ArrowRight,
 } from "lucide-react";
 
 const WEBHOOK_URL =
