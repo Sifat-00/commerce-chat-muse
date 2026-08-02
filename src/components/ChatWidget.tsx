@@ -11,6 +11,7 @@ import {
   ChevronRight,
   AlertTriangle,
   Bot,
+  ArrowRight,
 } from "lucide-react";
 
 const WEBHOOK_URL =
@@ -33,6 +34,7 @@ type Message = {
   role: "user" | "bot";
   text: string;
   products?: Product[];
+  browseUrl?: { text: string; url: string } | null;
   error?: boolean;
 };
 
@@ -287,11 +289,31 @@ function extractTaggedProducts(text: string): { text: string; products: Product[
   return { text: cleaned, products };
 }
 
-function parseWebhookPayload(raw: string): { text: string; products: Product[] } {
+function parseWebhookPayload(raw: string): {
+  text: string;
+  products: Product[];
+  browseUrl: { text: string; url: string } | null;
+} {
   let text = raw;
   let products: Product[] = [];
+  let browseUrl: { text: string; url: string } | null = null;
+
   try {
     const json = JSON.parse(raw);
+
+    // Extract the fixed browseurl object from the root-level payload.
+    if (
+      json &&
+      typeof json === "object" &&
+      json.browseurl &&
+      typeof json.browseurl === "object"
+    ) {
+      const b = json.browseurl as Record<string, unknown>;
+      if (typeof b.text === "string" && typeof b.url === "string") {
+        browseUrl = { text: b.text, url: b.url };
+      }
+    }
+
     products = collectProducts(json);
     const pick = (node: unknown): string => {
       if (typeof node === "string") return node;
@@ -317,9 +339,8 @@ function parseWebhookPayload(raw: string): { text: string; products: Product[] }
     [...tagged.products, ...products].forEach((p) => {
       if (!byImageTag.has(p.image)) byImageTag.set(p.image, p);
     });
-    return { text: text.trim(), products: [...byImageTag.values()] };
+    return { text: text.trim(), products: [...byImageTag.values()], browseUrl };
   }
-
 
   // Always parse the markdown too, then merge — the text list can contain items
   // that the structured payload missed (and vice versa).
@@ -343,8 +364,7 @@ function parseWebhookPayload(raw: string): { text: string; products: Product[] }
   products = [...byImage.values()];
   text = stripProductProse(text, products);
 
-  return { text: text.trim(), products };
-
+  return { text: text.trim(), products, browseUrl };
 }
 
 
@@ -532,27 +552,36 @@ export function ChatWidget() {
     [],
   );
 
-  const streamIn = useCallback((text: string, products: Product[]) => {
-    const words = text.length ? text.split(/(\s+)/) : [];
-    if (!words.length) {
-      setPhase("idle");
-      setMessages((prev) => [...prev, { id: uid(), role: "bot", text, products }]);
-      return;
-    }
-    setPhase("streaming");
-    setStreamText("");
-    let index = 0;
-    streamTimer.current = setInterval(() => {
-      index += 1;
-      setStreamText(words.slice(0, index).join(""));
-      if (index >= words.length) {
-        if (streamTimer.current) clearInterval(streamTimer.current);
-        setStreamText("");
+  const streamIn = useCallback(
+    (text: string, products: Product[], browseUrl: { text: string; url: string } | null) => {
+      const words = text.length ? text.split(/(\s+)/) : [];
+      if (!words.length) {
         setPhase("idle");
-        setMessages((prev) => [...prev, { id: uid(), role: "bot", text, products }]);
+        setMessages((prev) => [
+          ...prev,
+          { id: uid(), role: "bot", text, products, browseUrl },
+        ]);
+        return;
       }
-    }, 28);
-  }, []);
+      setPhase("streaming");
+      setStreamText("");
+      let index = 0;
+      streamTimer.current = setInterval(() => {
+        index += 1;
+        setStreamText(words.slice(0, index).join(""));
+        if (index >= words.length) {
+          if (streamTimer.current) clearInterval(streamTimer.current);
+          setStreamText("");
+          setPhase("idle");
+          setMessages((prev) => [
+            ...prev,
+            { id: uid(), role: "bot", text, products, browseUrl },
+          ]);
+        }
+      }, 28);
+    },
+    [],
+  );
 
   const send = async () => {
     const value = input.trim();
@@ -569,8 +598,12 @@ export function ChatWidget() {
       });
       if (!response.ok) throw new Error(`Request failed (${response.status})`);
       const raw = await response.text();
-      const { text, products } = parseWebhookPayload(raw);
-      streamIn(text || (products.length ? "Here's what I found:" : "…"), products);
+      const { text, products, browseUrl } = parseWebhookPayload(raw);
+      streamIn(
+        text || (products.length ? "Here's what I found:" : "…"),
+        products,
+        browseUrl,
+      );
     } catch (error) {
       setPhase("idle");
       setMessages((prev) => [
@@ -667,6 +700,17 @@ export function ChatWidget() {
                   </div>
                   {message.products && message.products.length > 0 && (
                     <ProductCarousel products={message.products} />
+                  )}
+                  {message.browseUrl && (
+                    <a
+                      href={message.browseUrl.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="mt-3 flex w-full items-center justify-center gap-2 rounded-[20px] border border-[#e1dbff] bg-[#f1f0ff] px-4 py-2.5 text-sm font-semibold text-[#5a4bfa] transition-all duration-200 hover:bg-[#5a4bfa] hover:text-white hover:shadow-md group"
+                    >
+                      {message.browseUrl.text}
+                      <ArrowRight className="h-4 w-4 transition-transform duration-200 group-hover:translate-x-1" />
+                    </a>
                   )}
                 </div>
               </div>
