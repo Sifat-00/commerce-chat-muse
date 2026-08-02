@@ -289,11 +289,31 @@ function extractTaggedProducts(text: string): { text: string; products: Product[
   return { text: cleaned, products };
 }
 
-function parseWebhookPayload(raw: string): { text: string; products: Product[] } {
+function parseWebhookPayload(raw: string): {
+  text: string;
+  products: Product[];
+  browseUrl: { text: string; url: string } | null;
+} {
   let text = raw;
   let products: Product[] = [];
+  let browseUrl: { text: string; url: string } | null = null;
+
   try {
     const json = JSON.parse(raw);
+
+    // Extract the fixed browseurl object from the root-level payload.
+    if (
+      json &&
+      typeof json === "object" &&
+      json.browseurl &&
+      typeof json.browseurl === "object"
+    ) {
+      const b = json.browseurl as Record<string, unknown>;
+      if (typeof b.text === "string" && typeof b.url === "string") {
+        browseUrl = { text: b.text, url: b.url };
+      }
+    }
+
     products = collectProducts(json);
     const pick = (node: unknown): string => {
       if (typeof node === "string") return node;
@@ -319,9 +339,8 @@ function parseWebhookPayload(raw: string): { text: string; products: Product[] }
     [...tagged.products, ...products].forEach((p) => {
       if (!byImageTag.has(p.image)) byImageTag.set(p.image, p);
     });
-    return { text: text.trim(), products: [...byImageTag.values()] };
+    return { text: text.trim(), products: [...byImageTag.values()], browseUrl };
   }
-
 
   // Always parse the markdown too, then merge — the text list can contain items
   // that the structured payload missed (and vice versa).
@@ -345,8 +364,7 @@ function parseWebhookPayload(raw: string): { text: string; products: Product[] }
   products = [...byImage.values()];
   text = stripProductProse(text, products);
 
-  return { text: text.trim(), products };
-
+  return { text: text.trim(), products, browseUrl };
 }
 
 
