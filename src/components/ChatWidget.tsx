@@ -701,6 +701,17 @@ export function ChatWidget() {
                   {message.products && message.products.length > 0 && (
                     <ProductCarousel products={message.products} />
                   )}
+                  {message.browseUrl && (
+                    <a
+                      href={message.browseUrl.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="mt-3 flex w-full items-center justify-center gap-2 rounded-[20px] border border-[#e1dbff] bg-[#f1f0ff] px-4 py-2.5 text-sm font-semibold text-[#5a4bfa] transition-all duration-200 hover:bg-[#5a4bfa] hover:text-white hover:shadow-md group"
+                    >
+                      {message.browseUrl.text}
+                      <ArrowRight className="h-4 w-4 transition-transform duration-200 group-hover:translate-x-1" />
+                    </a>
+                  )}
                 </div>
               </div>
             ),
