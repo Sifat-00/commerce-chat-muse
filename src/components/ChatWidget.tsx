@@ -552,27 +552,36 @@ export function ChatWidget() {
     [],
   );
 
-  const streamIn = useCallback((text: string, products: Product[]) => {
-    const words = text.length ? text.split(/(\s+)/) : [];
-    if (!words.length) {
-      setPhase("idle");
-      setMessages((prev) => [...prev, { id: uid(), role: "bot", text, products }]);
-      return;
-    }
-    setPhase("streaming");
-    setStreamText("");
-    let index = 0;
-    streamTimer.current = setInterval(() => {
-      index += 1;
-      setStreamText(words.slice(0, index).join(""));
-      if (index >= words.length) {
-        if (streamTimer.current) clearInterval(streamTimer.current);
-        setStreamText("");
+  const streamIn = useCallback(
+    (text: string, products: Product[], browseUrl: { text: string; url: string } | null) => {
+      const words = text.length ? text.split(/(\s+)/) : [];
+      if (!words.length) {
         setPhase("idle");
-        setMessages((prev) => [...prev, { id: uid(), role: "bot", text, products }]);
+        setMessages((prev) => [
+          ...prev,
+          { id: uid(), role: "bot", text, products, browseUrl },
+        ]);
+        return;
       }
-    }, 28);
-  }, []);
+      setPhase("streaming");
+      setStreamText("");
+      let index = 0;
+      streamTimer.current = setInterval(() => {
+        index += 1;
+        setStreamText(words.slice(0, index).join(""));
+        if (index >= words.length) {
+          if (streamTimer.current) clearInterval(streamTimer.current);
+          setStreamText("");
+          setPhase("idle");
+          setMessages((prev) => [
+            ...prev,
+            { id: uid(), role: "bot", text, products, browseUrl },
+          ]);
+        }
+      }, 28);
+    },
+    [],
+  );
 
   const send = async () => {
     const value = input.trim();
