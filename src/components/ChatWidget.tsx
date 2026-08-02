@@ -34,6 +34,7 @@ type Message = {
   role: "user" | "bot";
   text: string;
   products?: Product[];
+  browseUrl?: { text: string; url: string } | null;
   error?: boolean;
 };
 
