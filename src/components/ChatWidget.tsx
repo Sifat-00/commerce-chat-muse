@@ -663,59 +663,55 @@ export function ChatWidget() {
     [],
   );
 
-  const streamIn = useCallback(
-    (text: string, products: Product[], browseUrl: { text: string; url: string } | null) => {
-      const words = text.length ? text.split(/(\s+)/) : [];
-      if (!words.length) {
+  const streamIn = useCallback((reply: ParsedReply) => {
+    const { products, browseUrl, suggestions } = reply;
+    const text = reply.text || (products.length ? "Here's what I found:" : "…");
+    const commit = () =>
+      setMessages((prev) => [
+        ...prev,
+        { id: uid(), role: "bot", text, products, browseUrl, suggestions },
+      ]);
+
+    const words = text.length ? text.split(/(\s+)/) : [];
+    if (!words.length) {
+      setPhase("idle");
+      commit();
+      return;
+    }
+    setPhase("streaming");
+    setStreamText("");
+    let index = 0;
+    streamTimer.current = setInterval(() => {
+      index += 1;
+      setStreamText(words.slice(0, index).join(""));
+      if (index >= words.length) {
+        if (streamTimer.current) clearInterval(streamTimer.current);
+        setStreamText("");
         setPhase("idle");
-        setMessages((prev) => [
-          ...prev,
-          { id: uid(), role: "bot", text, products, browseUrl },
-        ]);
-        return;
+        commit();
       }
-      setPhase("streaming");
-      setStreamText("");
-      let index = 0;
-      streamTimer.current = setInterval(() => {
-        index += 1;
-        setStreamText(words.slice(0, index).join(""));
-        if (index >= words.length) {
-          if (streamTimer.current) clearInterval(streamTimer.current);
-          setStreamText("");
-          setPhase("idle");
-          setMessages((prev) => [
-            ...prev,
-            { id: uid(), role: "bot", text, products, browseUrl },
-          ]);
-        }
-      }, 28);
-    },
-    [],
-  );
+    }, 28);
+  }, []);
 
-  const send = async () => {
-    const value = input.trim();
-    if (!value || phase !== "idle") return;
-    setInput("");
-    setMessages((prev) => [...prev, { id: uid(), role: "user", text: value }]);
-    setPhase("checking");
+  const send = useCallback(
+    async (override?: string) => {
+      const value = (override ?? input).trim();
+      if (!value || phase !== "idle") return;
+      setInput("");
+      setMessages((prev) => [...prev, { id: uid(), role: "user", text: value }]);
+      setPhase("checking");
 
-    try {
-      const response = await fetch(WEBHOOK_URL, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ chatInput: value, sessionId: getSessionId() }),
-      });
-      if (!response.ok) throw new Error(`Request failed (${response.status})`);
-      const raw = await response.text();
-      const { text, products, browseUrl } = parseWebhookPayload(raw);
-      streamIn(
-        text || (products.length ? "Here's what I found:" : "…"),
-        products,
-        browseUrl,
-      );
-    } catch (error) {
+      try {
+        const response = await fetch(WEBHOOK_URL, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ chatInput: value, sessionId: getSessionId() }),
+        });
+        if (!response.ok) throw new Error(`Request failed (${response.status})`);
+        const raw = await response.text();
+        streamIn(parseWebhookPayload(raw));
+      } catch (error) {
+
       setPhase("idle");
       setMessages((prev) => [
         ...prev,
