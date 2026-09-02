@@ -711,22 +711,24 @@ export function ChatWidget() {
         const raw = await response.text();
         streamIn(parseWebhookPayload(raw));
       } catch (error) {
+        setPhase("idle");
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: uid(),
+            role: "bot",
+            error: true,
+            text:
+              error instanceof Error
+                ? `Connection issue: ${error.message}. Please try again.`
+                : "Something went wrong. Please try again.",
+          },
+        ]);
+      }
+    },
+    [input, phase, streamIn],
+  );
 
-      setPhase("idle");
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: uid(),
-          role: "bot",
-          error: true,
-          text:
-            error instanceof Error
-              ? `Connection issue: ${error.message}. Please try again.`
-              : "Something went wrong. Please try again.",
-        },
-      ]);
-    }
-  };
 
   const statusLabel = useMemo(
     () => (phase === "checking" ? "Checking..." : "Aria is typing..."),
