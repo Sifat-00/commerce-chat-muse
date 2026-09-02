@@ -35,6 +35,7 @@ type Message = {
   text: string;
   products?: Product[];
   browseUrl?: { text: string; url: string } | null;
+  suggestions?: string[];
   error?: boolean;
 };
 
