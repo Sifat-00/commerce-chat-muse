@@ -821,6 +821,23 @@ export function ChatWidget() {
                       <ArrowRight className="h-4 w-4 transition-transform duration-200 group-hover:translate-x-1" />
                     </a>
                   )}
+                  {message.id === lastBotId &&
+                    phase === "idle" &&
+                    message.suggestions &&
+                    message.suggestions.length > 0 && (
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        {message.suggestions.map((suggestion) => (
+                          <button
+                            key={suggestion}
+                            type="button"
+                            onClick={() => void send(suggestion)}
+                            className="animate-msg-in rounded-full border border-indigo-200 bg-indigo-50 px-3 py-1.5 text-xs font-medium text-indigo-700 transition-all duration-200 hover:border-indigo-500 hover:bg-indigo-600 hover:text-white"
+                          >
+                            {suggestion}
+                          </button>
+                        ))}
+                      </div>
+                    )}
                 </div>
               </div>
             ),
