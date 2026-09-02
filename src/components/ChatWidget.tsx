@@ -738,6 +738,13 @@ export function ChatWidget() {
   // Visible while waiting, and hidden the instant real text starts rendering.
   const showStatus = phase === "checking" || (phase === "streaming" && !streamText);
 
+  // Suggestion chips only render for the most recent bot response.
+  const lastBotId = useMemo(
+    () => [...messages].reverse().find((m) => m.role === "bot" && !m.error)?.id ?? null,
+    [messages],
+  );
+
+
 
   return (
     <>
