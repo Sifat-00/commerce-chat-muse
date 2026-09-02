@@ -15,7 +15,7 @@ import {
 } from "lucide-react";
 
 const WEBHOOK_URL =
-  "https://n8n-f2ty.srv1670697.hstgr.cloud/webhook-test/16276221-92eb-4379-9bd1-34d8eb162c96";
+  "https://n8n-f2ty.srv1670697.hstgr.cloud/webhook-test/8172b256-132b-4bef-89c6-a06193c35219";
 
 /* ---------------------------------- types --------------------------------- */
 
@@ -35,6 +35,7 @@ type Message = {
   text: string;
   products?: Product[];
   browseUrl?: { text: string; url: string } | null;
+  suggestions?: string[];
   error?: boolean;
 };
 
@@ -289,14 +290,124 @@ function extractTaggedProducts(text: string): { text: string; products: Product[
   return { text: cleaned, products };
 }
 
-function parseWebhookPayload(raw: string): {
+type ParsedReply = {
   text: string;
   products: Product[];
   browseUrl: { text: string; url: string } | null;
-} {
+  suggestions: string[];
+};
+
+/**
+ * Backend contract:
+ * { suggestions: string[], ai_response_text: string, carousel: [{name,image_url,price,summary}] }
+ * Accepts the object at the root, nested under output/data/json, or embedded as a
+ * JSON blob inside a plain-text/markdown response. Fully defensive.
+ */
+function extractStructuredReply(raw: string): ParsedReply | null {
+  const candidates: unknown[] = [];
+
+  const tryPush = (value: string) => {
+    try {
+      candidates.push(JSON.parse(value));
+    } catch {
+      /* not json */
+    }
+  };
+
+  tryPush(raw.trim());
+  // JSON blob possibly wrapped in a ```json fence or surrounded by prose.
+  const fenced = raw.match(/```(?:json)?\s*([\s\S]*?)```/i)?.[1];
+  if (fenced) tryPush(fenced.trim());
+  const braced = raw.slice(raw.indexOf("{"), raw.lastIndexOf("}") + 1);
+  if (braced.length > 2) tryPush(braced);
+
+  const findShape = (node: unknown, depth = 0): Record<string, unknown> | null => {
+    if (!node || depth > 5) return null;
+    if (Array.isArray(node)) {
+      for (const item of node) {
+        const hit = findShape(item, depth + 1);
+        if (hit) return hit;
+      }
+      return null;
+    }
+    if (typeof node !== "object") return null;
+    const obj = node as Record<string, unknown>;
+    if ("ai_response_text" in obj || "carousel" in obj || "suggestions" in obj) return obj;
+    for (const value of Object.values(obj)) {
+      const hit = findShape(value, depth + 1);
+      if (hit) return hit;
+    }
+    return null;
+  };
+
+  for (const candidate of candidates) {
+    const shape = findShape(candidate);
+    if (!shape) continue;
+
+    const text =
+      typeof shape.ai_response_text === "string" ? shape.ai_response_text.trim() : "";
+
+    const carousel = Array.isArray(shape.carousel) ? shape.carousel : [];
+    const products: Product[] = carousel
+      .filter((item): item is Record<string, unknown> => !!item && typeof item === "object")
+      .map((item) => ({
+        id: String(item.id ?? uid()),
+        title: typeof item.name === "string" ? item.name : String(item.title ?? "Product"),
+        price: normalizePrice(item.price),
+        image:
+          typeof item.image_url === "string"
+            ? item.image_url
+            : typeof item.image === "string"
+              ? item.image
+              : "",
+        description:
+          typeof item.summary === "string"
+            ? item.summary
+            : typeof item.description === "string"
+              ? item.description
+              : null,
+        stock: null,
+        url:
+          typeof item.url === "string"
+            ? item.url
+            : typeof item.product_url === "string"
+              ? item.product_url
+              : null,
+      }))
+      .filter((product) => !!product.image);
+
+    const suggestions = Array.isArray(shape.suggestions)
+      ? shape.suggestions
+          .filter((s): s is string => typeof s === "string" && s.trim().length > 0)
+          .map((s) => s.trim())
+          .slice(0, 6)
+      : [];
+
+    let browseUrl: { text: string; url: string } | null = null;
+    const b = shape.browseurl;
+    if (b && typeof b === "object") {
+      const obj = b as Record<string, unknown>;
+      if (typeof obj.text === "string" && typeof obj.url === "string") {
+        browseUrl = { text: obj.text, url: obj.url };
+      }
+    }
+
+    if (text || products.length || suggestions.length) {
+      return { text, products, browseUrl, suggestions };
+    }
+  }
+
+  return null;
+}
+
+function parseWebhookPayload(raw: string): ParsedReply {
+  const structured = extractStructuredReply(raw);
+  if (structured) return structured;
+
   let text = raw;
   let products: Product[] = [];
   let browseUrl: { text: string; url: string } | null = null;
+
 
   try {
     const json = JSON.parse(raw);
@@ -339,7 +450,7 @@ function parseWebhookPayload(raw: string): {
     [...tagged.products, ...products].forEach((p) => {
       if (!byImageTag.has(p.image)) byImageTag.set(p.image, p);
     });
-    return { text: text.trim(), products: [...byImageTag.values()], browseUrl };
+    return { text: text.trim(), products: [...byImageTag.values()], browseUrl, suggestions: [] };
   }
 
   // Always parse the markdown too, then merge — the text list can contain items
@@ -364,7 +475,7 @@ function parseWebhookPayload(raw: string): {
   products = [...byImage.values()];
   text = stripProductProse(text, products);
 
-  return { text: text.trim(), products, browseUrl };
+  return { text: text.trim(), products, browseUrl, suggestions: [] };
 }
 
 
@@ -552,74 +663,72 @@ export function ChatWidget() {
     [],
   );
 
-  const streamIn = useCallback(
-    (text: string, products: Product[], browseUrl: { text: string; url: string } | null) => {
-      const words = text.length ? text.split(/(\s+)/) : [];
-      if (!words.length) {
+  const streamIn = useCallback((reply: ParsedReply) => {
+    const { products, browseUrl, suggestions } = reply;
+    const text = reply.text || (products.length ? "Here's what I found:" : "…");
+    const commit = () =>
+      setMessages((prev) => [
+        ...prev,
+        { id: uid(), role: "bot", text, products, browseUrl, suggestions },
+      ]);
+
+    const words = text.length ? text.split(/(\s+)/) : [];
+    if (!words.length) {
+      setPhase("idle");
+      commit();
+      return;
+    }
+    setPhase("streaming");
+    setStreamText("");
+    let index = 0;
+    streamTimer.current = setInterval(() => {
+      index += 1;
+      setStreamText(words.slice(0, index).join(""));
+      if (index >= words.length) {
+        if (streamTimer.current) clearInterval(streamTimer.current);
+        setStreamText("");
+        setPhase("idle");
+        commit();
+      }
+    }, 28);
+  }, []);
+
+  const send = useCallback(
+    async (override?: string) => {
+      const value = (override ?? input).trim();
+      if (!value || phase !== "idle") return;
+      setInput("");
+      setMessages((prev) => [...prev, { id: uid(), role: "user", text: value }]);
+      setPhase("checking");
+
+      try {
+        const response = await fetch(WEBHOOK_URL, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ chatInput: value, sessionId: getSessionId() }),
+        });
+        if (!response.ok) throw new Error(`Request failed (${response.status})`);
+        const raw = await response.text();
+        streamIn(parseWebhookPayload(raw));
+      } catch (error) {
         setPhase("idle");
         setMessages((prev) => [
           ...prev,
-          { id: uid(), role: "bot", text, products, browseUrl },
+          {
+            id: uid(),
+            role: "bot",
+            error: true,
+            text:
+              error instanceof Error
+                ? `Connection issue: ${error.message}. Please try again.`
+                : "Something went wrong. Please try again.",
+          },
         ]);
-        return;
       }
-      setPhase("streaming");
-      setStreamText("");
-      let index = 0;
-      streamTimer.current = setInterval(() => {
-        index += 1;
-        setStreamText(words.slice(0, index).join(""));
-        if (index >= words.length) {
-          if (streamTimer.current) clearInterval(streamTimer.current);
-          setStreamText("");
-          setPhase("idle");
-          setMessages((prev) => [
-            ...prev,
-            { id: uid(), role: "bot", text, products, browseUrl },
-          ]);
-        }
-      }, 28);
     },
-    [],
+    [input, phase, streamIn],
   );
 
-  const send = async () => {
-    const value = input.trim();
-    if (!value || phase !== "idle") return;
-    setInput("");
-    setMessages((prev) => [...prev, { id: uid(), role: "user", text: value }]);
-    setPhase("checking");
-
-    try {
-      const response = await fetch(WEBHOOK_URL, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ chatInput: value, sessionId: getSessionId() }),
-      });
-      if (!response.ok) throw new Error(`Request failed (${response.status})`);
-      const raw = await response.text();
-      const { text, products, browseUrl } = parseWebhookPayload(raw);
-      streamIn(
-        text || (products.length ? "Here's what I found:" : "…"),
-        products,
-        browseUrl,
-      );
-    } catch (error) {
-      setPhase("idle");
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: uid(),
-          role: "bot",
-          error: true,
-          text:
-            error instanceof Error
-              ? `Connection issue: ${error.message}. Please try again.`
-              : "Something went wrong. Please try again.",
-        },
-      ]);
-    }
-  };
 
   const statusLabel = useMemo(
     () => (phase === "checking" ? "Checking..." : "Aria is typing..."),
@@ -628,6 +737,13 @@ export function ChatWidget() {
 
   // Visible while waiting, and hidden the instant real text starts rendering.
   const showStatus = phase === "checking" || (phase === "streaming" && !streamText);
+
+  // Suggestion chips only render for the most recent bot response.
+  const lastBotId = useMemo(
+    () => [...messages].reverse().find((m) => m.role === "bot" && !m.error)?.id ?? null,
+    [messages],
+  );
+
 
 
   return (
@@ -712,6 +828,23 @@ export function ChatWidget() {
                       <ArrowRight className="h-4 w-4 transition-transform duration-200 group-hover:translate-x-1" />
                     </a>
                   )}
+                  {message.id === lastBotId &&
+                    phase === "idle" &&
+                    message.suggestions &&
+                    message.suggestions.length > 0 && (
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        {message.suggestions.map((suggestion) => (
+                          <button
+                            key={suggestion}
+                            type="button"
+                            onClick={() => void send(suggestion)}
+                            className="animate-msg-in rounded-full border border-indigo-200 bg-indigo-50 px-3 py-1.5 text-xs font-medium text-indigo-700 transition-all duration-200 hover:border-indigo-500 hover:bg-indigo-600 hover:text-white"
+                          >
+                            {suggestion}
+                          </button>
+                        ))}
+                      </div>
+                    )}
                 </div>
               </div>
             ),
