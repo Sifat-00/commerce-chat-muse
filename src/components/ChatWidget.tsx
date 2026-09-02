@@ -450,7 +450,7 @@ function parseWebhookPayload(raw: string): ParsedReply {
     [...tagged.products, ...products].forEach((p) => {
       if (!byImageTag.has(p.image)) byImageTag.set(p.image, p);
     });
-    return { text: text.trim(), products: [...byImageTag.values()], browseUrl };
+    return { text: text.trim(), products: [...byImageTag.values()], browseUrl, suggestions: [] };
   }
 
   // Always parse the markdown too, then merge — the text list can contain items
@@ -475,7 +475,7 @@ function parseWebhookPayload(raw: string): ParsedReply {
   products = [...byImage.values()];
   text = stripProductProse(text, products);
 
-  return { text: text.trim(), products, browseUrl };
+  return { text: text.trim(), products, browseUrl, suggestions: [] };
 }
 
 
