@@ -290,14 +290,124 @@ function extractTaggedProducts(text: string): { text: string; products: Product[
   return { text: cleaned, products };
 }
 
-function parseWebhookPayload(raw: string): {
+type ParsedReply = {
   text: string;
   products: Product[];
   browseUrl: { text: string; url: string } | null;
-} {
+  suggestions: string[];
+};
+
+/**
+ * Backend contract:
+ * { suggestions: string[], ai_response_text: string, carousel: [{name,image_url,price,summary}] }
+ * Accepts the object at the root, nested under output/data/json, or embedded as a
+ * JSON blob inside a plain-text/markdown response. Fully defensive.
+ */
+function extractStructuredReply(raw: string): ParsedReply | null {
+  const candidates: unknown[] = [];
+
+  const tryPush = (value: string) => {
+    try {
+      candidates.push(JSON.parse(value));
+    } catch {
+      /* not json */
+    }
+  };
+
+  tryPush(raw.trim());
+  // JSON blob possibly wrapped in a ```json fence or surrounded by prose.
+  const fenced = raw.match(/```(?:json)?\s*([\s\S]*?)```/i)?.[1];
+  if (fenced) tryPush(fenced.trim());
+  const braced = raw.slice(raw.indexOf("{"), raw.lastIndexOf("}") + 1);
+  if (braced.length > 2) tryPush(braced);
+
+  const findShape = (node: unknown, depth = 0): Record<string, unknown> | null => {
+    if (!node || depth > 5) return null;
+    if (Array.isArray(node)) {
+      for (const item of node) {
+        const hit = findShape(item, depth + 1);
+        if (hit) return hit;
+      }
+      return null;
+    }
+    if (typeof node !== "object") return null;
+    const obj = node as Record<string, unknown>;
+    if ("ai_response_text" in obj || "carousel" in obj || "suggestions" in obj) return obj;
+    for (const value of Object.values(obj)) {
+      const hit = findShape(value, depth + 1);
+      if (hit) return hit;
+    }
+    return null;
+  };
+
+  for (const candidate of candidates) {
+    const shape = findShape(candidate);
+    if (!shape) continue;
+
+    const text =
+      typeof shape.ai_response_text === "string" ? shape.ai_response_text.trim() : "";
+
+    const carousel = Array.isArray(shape.carousel) ? shape.carousel : [];
+    const products: Product[] = carousel
+      .filter((item): item is Record<string, unknown> => !!item && typeof item === "object")
+      .map((item) => ({
+        id: String(item.id ?? uid()),
+        title: typeof item.name === "string" ? item.name : String(item.title ?? "Product"),
+        price: normalizePrice(item.price),
+        image:
+          typeof item.image_url === "string"
+            ? item.image_url
+            : typeof item.image === "string"
+              ? item.image
+              : "",
+        description:
+          typeof item.summary === "string"
+            ? item.summary
+            : typeof item.description === "string"
+              ? item.description
+              : null,
+        stock: null,
+        url:
+          typeof item.url === "string"
+            ? item.url
+            : typeof item.product_url === "string"
+              ? item.product_url
+              : null,
+      }))
+      .filter((product) => !!product.image);
+
+    const suggestions = Array.isArray(shape.suggestions)
+      ? shape.suggestions
+          .filter((s): s is string => typeof s === "string" && s.trim().length > 0)
+          .map((s) => s.trim())
+          .slice(0, 6)
+      : [];
+
+    let browseUrl: { text: string; url: string } | null = null;
+    const b = shape.browseurl;
+    if (b && typeof b === "object") {
+      const obj = b as Record<string, unknown>;
+      if (typeof obj.text === "string" && typeof obj.url === "string") {
+        browseUrl = { text: obj.text, url: obj.url };
+      }
+    }
+
+    if (text || products.length || suggestions.length) {
+      return { text, products, browseUrl, suggestions };
+    }
+  }
+
+  return null;
+}
+
+function parseWebhookPayload(raw: string): ParsedReply {
+  const structured = extractStructuredReply(raw);
+  if (structured) return structured;
+
   let text = raw;
   let products: Product[] = [];
   let browseUrl: { text: string; url: string } | null = null;
+
 
   try {
     const json = JSON.parse(raw);
