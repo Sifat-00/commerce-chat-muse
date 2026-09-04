@@ -64,7 +64,7 @@ async function sendToWebhook(userMessage: string, sessionId: string): Promise<st
     const res = await fetch(N8N_WEBHOOK_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ chatInput: userMessage, sessionId }),
+      body: JSON.stringify({ chatInput: userMessage, sessionId, channel: "web" }),
     });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const ct = res.headers.get("content-type") || "";
