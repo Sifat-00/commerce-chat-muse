@@ -705,7 +705,7 @@ export function ChatWidget() {
         const response = await fetch(WEBHOOK_URL, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ chatInput: value, sessionId: getSessionId() }),
+          body: JSON.stringify({ chatInput: value, sessionId: getSessionId(), channel: "web" }),
         });
         if (!response.ok) throw new Error(`Request failed (${response.status})`);
         const raw = await response.text();
