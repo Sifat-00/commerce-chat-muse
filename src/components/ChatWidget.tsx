@@ -15,7 +15,7 @@ import {
 } from "lucide-react";
 
 const WEBHOOK_URL =
-  "https://n8n-f2ty.srv1670697.hstgr.cloud/webhook-test/8172b256-132b-4bef-89c6-a06193c35219";
+  "https://n8n-f2ty.srv1670697.hstgr.cloud/webhook-test/web";
 
 /* ---------------------------------- types --------------------------------- */
 
